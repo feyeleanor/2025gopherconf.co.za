@@ -12,6 +12,7 @@ import (
 )
 
 const ADDRESS = ":1024"
+const PROTOCOL = "tcp"
 
 const MESSAGE_TERMINATOR = '\n'
 const MESSAGE_WHITESPACE = ' '
@@ -23,13 +24,7 @@ type Person struct {
 }
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
-	defer cancel()
-
-	var d net.Dialer
-	if c, e := d.DialContext(ctx, "tcp", ADDRESS); e == nil {
-		defer c.Close()
-
+	DialServer(PROTOCOL, ADDRESS, func(c net.Conn) {
 		for _, n := range os.Args[1:] {
 			FetchFile(c, n, func(s string) {
 				ForEachRecord(s, func(p Person) {
@@ -37,9 +32,7 @@ func main() {
 				})
 			})
 		}
-	} else {
-		log.Fatal(e)
-	}
+	})
 }
 
 func ForEachRecord(s string, f func(Person)) {
@@ -63,6 +56,20 @@ func FetchFile(c net.Conn, n string, f func(string)) {
 		f(m)
 	} else {
 		log.Printf("%v: %v\n", n, e)
+	}
+}
+
+func DialServer(p, a string, f func(net.Conn)) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+	defer cancel()
+
+	var d net.Dialer
+	if c, e := d.DialContext(ctx, PROTOCOL, ADDRESS); e == nil {
+		defer c.Close()
+
+		f(c)
+	} else {
+		log.Fatal(e)
 	}
 }
 
