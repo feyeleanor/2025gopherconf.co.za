@@ -22,25 +22,16 @@ type Person struct {
 func main() {
 	var w sync.WaitGroup
 
-	c := &http.Client {
-		Transport: 	&http.Transport {
-			TLSClientConfig: &tls.Config {
-				InsecureSkipVerify: true }}}
-
-/*
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
-		InsecureSkipVerify: true,
-	}
-*/
-
 	for _, n := range os.Args[1:] {
 		w.Add(1)
 		go func(n string) {
 			defer w.Done()
 
-			FetchWebPage(c, URL + n, func(b []byte) {
-				ForEachRecord(b, func(p Person) {
-					fmt.Printf("%v.json: %v [#%v] is %v\n", n, p.Name, p.Id, p.Age)
+			PrepareTls(func(c *http.Client) {
+				FetchWebPage(c, URL + n, func(b []byte) {
+					ForEachRecord(b, func(p Person) {
+						fmt.Printf("%v.json: %v [#%v] is %v\n", n, p.Name, p.Id, p.Age)
+					})
 				})
 			})
 		}(n)
@@ -70,4 +61,20 @@ func FetchWebPage(c *http.Client, url string, f func([]byte)) {
 			}
 		}
 	}
+}
+
+/*
+	There is an alternative approach where we turn off Cert chain verification for
+	the default http.ServeMUX
+
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+*/
+
+func PrepareTls(f func(*http.Client)) {
+	f(&http.Client {
+		Transport: 	&http.Transport {
+			TLSClientConfig: &tls.Config {
+				InsecureSkipVerify: true }}})
 }
