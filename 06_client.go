@@ -16,8 +16,6 @@ const URL = "https://localhost:1024/"
 const CERT_FILE = "06_client_cert.pem"
 const KEY_FILE = "06_client_key.pem"
 
-const INVALID_KEYPAIR = 1
-
 type Person struct {
 	Id		int `json:"id"`
 	Name	string `json:"name"`
@@ -27,37 +25,21 @@ type Person struct {
 func main() {
 	var w sync.WaitGroup
 
-	cert, _ := LoadCert(CERT_FILE, KEY_FILE)
-	ca, _ := x509.SystemCertPool()
-	c := &http.Client {
-		Transport: 	&http.Transport {
-			TLSClientConfig: &tls.Config {
-				RootCAs: ca,
-				Certificates: []tls.Certificate{ cert },
-				InsecureSkipVerify: true }}}
-
 	for _, f := range os.Args[1:] {
 		w.Add(1)
 		go func(f string) {
 			defer w.Done()
 
-			FetchWebPage(c, URL + f, func(b []byte) {
-				ForEachRecord(b, func(p Person) {
-					fmt.Printf("%v.json: %v [#%v] is %v\n", f, p.Name, p.Id, p.Age)
+			PrepareTls(func(c *http.Client) {
+				FetchWebPage(c, URL + f, func(b []byte) {
+					ForEachRecord(b, func(p Person) {
+						fmt.Printf("%v.json: %v [#%v] is %v\n", f, p.Name, p.Id, p.Age)
+					})
 				})
 			})
 		}(f)
 	}
 	w.Wait()
-}
-
-func LoadCert(c, k string) (r tls.Certificate, e error) {
-	r, e = tls.LoadX509KeyPair(c, k)
-	if e != nil {
-		log.Printf("Error loading certificate and key file: %v\n", e)
-		os.Exit(INVALID_KEYPAIR)
-	}
-	return
 }
 
 func ForEachRecord(b []byte, f func(Person)) {
@@ -84,4 +66,23 @@ func FetchWebPage(c *http.Client, url string, f func([]byte)) {
 	} else {
 		log.Printf("fetching %v: %v\n", url, e)
 	}
+}
+
+func PrepareTls(f func(*http.Client)) {
+	cert, _ := LoadCert(CERT_FILE, KEY_FILE)
+	ca, _ := x509.SystemCertPool()
+	f(&http.Client {
+		Transport: 	&http.Transport {
+			TLSClientConfig: &tls.Config {
+				RootCAs: ca,
+				Certificates: []tls.Certificate{ cert },
+				InsecureSkipVerify: true }}})
+}
+
+func LoadCert(c, k string) (r tls.Certificate, e error) {
+	r, e = tls.LoadX509KeyPair(c, k)
+	if e != nil {
+		log.Fatalf("Error loading certificate and key file: %v\n", e)
+	}
+	return
 }
