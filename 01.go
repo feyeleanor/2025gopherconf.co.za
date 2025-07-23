@@ -1,11 +1,11 @@
 package main
+
 import (
 	"fmt"
 	"net/http"
 )
 
 const MESSAGE = "hello world"
-const ADDRESS = ":1024"
 
 func main() {
 	http.HandleFunc("/hello", Hello)

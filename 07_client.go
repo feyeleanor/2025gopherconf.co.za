@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -11,23 +9,13 @@ import (
 	"time"
 )
 
-const ADDRESS = ":1024"
 const PROTOCOL = "tcp"
-
-const MESSAGE_TERMINATOR = '\n'
-const MESSAGE_WHITESPACE = ' '
-
-type Person struct {
-	Id		int
-	Name	string
-	Age		string
-}
 
 func main() {
 	DialServer(PROTOCOL, ADDRESS, func(c net.Conn) {
 		for _, n := range os.Args[1:] {
-			FetchFile(c, n, func(s string) {
-				ForEachRecord(s, func(p Person) {
+			FetchFile(c, n, func(b []byte) {
+				ForEachRecord(b, func(p Person) {
 					fmt.Printf("%v.json: %v [#%v] is %v\n", n, p.Name, p.Id, p.Age)
 				})
 			})
@@ -35,65 +23,27 @@ func main() {
 	})
 }
 
-func ForEachRecord(s string, f func(Person)) {
-	var e error
-	r := []Person{}
-	if e = json.Unmarshal([]byte(s), &r); e == nil {
-		for _, v := range r {
-			f(v)
-		}
-	}
-}
-
-func FetchFile(c net.Conn, n string, f func(string)) {
+func FetchFile(c net.Conn, n string, f func([]byte)) {
 	log.Println("Requesting file", n)
 	SendMessage(c, n)
-	if m, e := ReceiveMessage(c); e == nil {
+	m, e := ReceiveMessage(c)
+	LogErrors(e, func() {
 		if len(m) == 0 {
 			log.Println("File", n, "not found")
 			return
 		}
 		f(m)
-	} else {
-		log.Printf("%v: %v\n", n, e)
-	}
+	})
 }
 
 func DialServer(p, a string, f func(net.Conn)) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
 	var d net.Dialer
-	if c, e := d.DialContext(ctx, PROTOCOL, ADDRESS); e == nil {
+	c, e := d.DialContext(ctx, PROTOCOL, ADDRESS)
+	LogErrors(e, func() {
 		defer c.Close()
-
 		f(c)
-	} else {
-		log.Fatal(e)
-	}
-}
-
-func ReceiveMessage(c net.Conn) (s string, e error) {
-	if s, e = bufio.NewReader(c).ReadString(MESSAGE_TERMINATOR); e == nil {
-		s = s[:len(s) - 1]
-	}
-	return
-}
-
-func SendMessage(c net.Conn, s ...any) {
-	for _, v := range s {
-		switch v := v.(type) {
-		case []byte:
-			c.Write(v)
-			c.Write([]byte(string(MESSAGE_TERMINATOR)))
-		case string:
-			SendMessage(c, []byte(v))
-		case rune:
-			SendMessage(c, string(v))
-		case fmt.Stringer:
-			SendMessage(c, v.String())
-		default:
-			log.Printf("unable to send message [%T] %v\n", v, v)
-		}
-	}
+	})
 }

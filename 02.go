@@ -1,11 +1,11 @@
 package main
+
 import (
 	"fmt"
 	"net/http"
 )
 
 const MESSAGE = "hello world"
-const ADDRESS = ":1024"
 
 const CERT_FILE = "02_cert.pem"
 const KEY_FILE = "02_key.pem"
