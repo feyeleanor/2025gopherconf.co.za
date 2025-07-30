@@ -1,22 +1,17 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 )
 
-const MESSAGE = "hello world"
-
-const CERT_FILE = "02_cert.pem"
-const KEY_FILE = "02_key.pem"
-
 func main() {
 	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, MESSAGE)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte("hello world"))
 	})
 
-	if e := http.ListenAndServeTLS(ADDRESS, CERT_FILE, KEY_FILE, nil); e != nil {
-		fmt.Println(e)
+	if e := http.ListenAndServeTLS("localhost:1024", "server_cert.pem", "server_key.pem", nil); e != nil {
+		log.Println(e)
 	}
 }

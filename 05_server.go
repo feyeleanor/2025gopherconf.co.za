@@ -1,28 +1,23 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 )
 
-const CERT_FILE = "02_cert.pem"
-const KEY_FILE = "02_key.pem"
-
 func main() {
 	dir := GetDir(os.Args[1:]...)
 	http.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		LoadFile(JSON, GetPath(dir, r.URL.Path), func(j string, e error) {
-			LogErrors(
-				e,
-				func() {
-					w.Header().Set("Content-Type", "application/json")
-					fmt.Fprint(w, j)
-				},
-				func() {
-					http.NotFound(w, r)
-				})
-		})
+		log.Println(r.RemoteAddr, "requested file", r.URL.Path)
+
+		b := LoadFile(".json", GetPath(dir, r.URL.Path))
+		if b == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(b)
 	})
-	fmt.Println(http.ListenAndServeTLS(ADDRESS, CERT_FILE, KEY_FILE, nil))
+	log.Println(http.ListenAndServeTLS("localhost:1024", "server_cert.pem", "server_key.pem", nil))
 }

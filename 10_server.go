@@ -33,8 +33,11 @@ func TlsClient(c, k string, f func(*tls.Config)) {
 	}
 
 	f(&tls.Config{
-		Rand:         rand.Reader,
-		Certificates: []tls.Certificate{cert},
+		Rand: rand.Reader,
+		//		ClientAuth: tls.RequireAndVerifyClientCert,
+		ClientAuth:         tls.RequestClientCert,
+		InsecureSkipVerify: true,
+		Certificates:       []tls.Certificate{cert},
 	})
 }
 
@@ -59,9 +62,9 @@ func HandleTlsConnections(p, a string, c *tls.Config, f func(net.Conn)) {
 
 func MessageLoop(c net.Conn, f func(string)) {
 	for {
-		switch b, e := ReceiveMessage(c); e {
+		switch s, e := ReceiveMessage(c); e {
 		case nil:
-			for _, m := range Tokens(b) {
+			for _, m := range Tokens(s) {
 				f(m)
 			}
 		case io.EOF:

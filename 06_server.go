@@ -1,37 +1,40 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/tls"
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 )
 
-const CERT_FILE = "06_server_cert.pem"
-const KEY_FILE = "06_server_key.pem"
-
 func main() {
 	dir := GetDir(os.Args[1:]...)
 
-	s := NewTlsServer(ADDRESS, tls.RequestClientCert)
-	//:= NewTlsServer(ADDRESS, tls.RequireAndVerifyClientCert)
+	s := NewTlsServer("localhost:1024", tls.RequestClientCert)
+	//:= NewTlsServer("localhost:1024", tls.RequireAndVerifyClientCert)
 
 	s.AddRoutes(map[string]func(http.ResponseWriter, *http.Request){
+		"GET /hello": func(w http.ResponseWriter, r *http.Request) {
+			log.Println(r.RemoteAddr, "requested /hello")
+
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write([]byte("hello world"))
+		},
+
 		"GET /": func(w http.ResponseWriter, r *http.Request) {
-			LoadFile(JSON, GetPath(dir, r.URL.Path), func(j string, e error) {
-				LogErrors(
-					e,
-					func() {
-						w.Header().Set("Content-Type", "application/json")
-						fmt.Fprint(w, j)
-					},
-					func() {
-						http.NotFound(w, r)
-					})
-			})
+			log.Println(r.RemoteAddr, "requested file", r.URL.Path)
+
+			b := LoadFile(".json", GetPath(dir, r.URL.Path))
+			if b == nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(b)
 		},
 	})
-	fmt.Println(s.ListenAndServeTLS(CERT_FILE, KEY_FILE))
+	log.Println(s.ListenAndServeTLS("server_cert.pem", "server_key.pem"))
 }
 
 type TlsServer struct {
@@ -50,6 +53,7 @@ func NewTlsServer(addr string, auth tls.ClientAuthType) *TlsServer {
 			Addr: addr,
 			TLSConfig: &tls.Config{
 				ClientAuth: auth,
+				Rand:       rand.Reader,
 			},
 			Handler: http.NewServeMux(),
 		}}

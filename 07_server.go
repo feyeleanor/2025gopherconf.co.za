@@ -5,48 +5,45 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 )
-
-const PROTOCOL = "tcp"
 
 func main() {
 	dir := GetDir(os.Args[1:]...)
-	HandleConnections(PROTOCOL, ADDRESS, func(c net.Conn) {
-		CommandLoop(c, func(m string) {
-			LoadFile(JSON, GetPath(dir, strings.ToLower(m)), func(j string, e error) {
-				log.Printf("%v: requested file %v\n", c.RemoteAddr(), m)
-				var x string
-				if e == nil {
-					x = strings.ReplaceAll(j, string(MESSAGE_TERMINATOR), "")
-				}
-				SendMessage(c, x)
-			})
+	HandleConnections("tcp", "localhost:1024", func(c net.Conn) {
+		MessageLoop(c, func(m string) {
+			log.Println(c.RemoteAddr(), "requested file", m)
+
+			b := LoadFile(".json", GetPath(dir, m))
+			if b != nil {
+				b = DeleteAll(b, byte('\n'))
+			}
+			SendMessage(c, b)
 		})
 	})
 }
 
 func HandleConnections(p, a string, f func(net.Conn)) {
-	l, e := net.Listen(p, a)
-	LogErrors(e, func() {
+	if l, e := net.Listen(p, a); e == nil {
 		for {
-			c, e := l.Accept()
-			LogErrors(e, func() {
+			if c, e := l.Accept(); e == nil {
 				go func(c net.Conn) {
 					defer c.Close()
 					log.Printf("%v: connected\n", c.RemoteAddr())
 
 					f(c)
 				}(c)
-			})
+			} else {
+				log.Println(e)
+			}
 		}
-	})
+	} else {
+		log.Println(e)
+	}
 }
 
-func CommandLoop(c net.Conn, f func(string)) {
+func MessageLoop(c net.Conn, f func(string)) {
 	for {
-		b, e := ReceiveMessage(c)
-		switch e {
+		switch b, e := ReceiveMessage(c); e {
 		case nil:
 			for _, m := range Tokens(b) {
 				f(m)

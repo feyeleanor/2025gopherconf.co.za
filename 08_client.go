@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"fmt"
 	"log"
@@ -10,13 +11,9 @@ import (
 	"time"
 )
 
-const PROTOCOL = "tcp"
-const CERT_FILE = "06_server_cert.pem"
-const KEY_FILE = "06_server_key.pem"
-
 func main() {
-	AsTlsClient(CERT_FILE, KEY_FILE, func(c *tls.Config) {
-		DialTlsServer(PROTOCOL, ADDRESS, c, func(c net.Conn) {
+	TlsClient("client_cert.pem", "client_key.pem", func(c *tls.Config) {
+		DialTlsServer("tcp", "localhost:1024", c, func(c net.Conn) {
 			for _, n := range os.Args[1:] {
 				FetchFile(c, n, func(b []byte) {
 					ForEachRecord(b, func(p Person) {
@@ -37,18 +34,17 @@ func FetchFile(c net.Conn, n string, f func([]byte)) {
 			return
 		}
 		f(m)
-	} else {
-		log.Printf("%v: %v\n", n, e)
 	}
 }
 
-func AsTlsClient(c, k string, f func(*tls.Config)) {
+func TlsClient(c, k string, f func(*tls.Config)) {
 	cert, e := tls.LoadX509KeyPair(c, k)
 	if e != nil {
 		log.Fatal(e)
 	}
 
 	f(&tls.Config{
+		Rand:               rand.Reader,
 		Certificates:       []tls.Certificate{cert},
 		InsecureSkipVerify: true,
 	})
@@ -61,7 +57,7 @@ func DialTlsServer(p, a string, c *tls.Config, f func(net.Conn)) {
 	d := &tls.Dialer{
 		Config: c,
 	}
-	if c, e := d.DialContext(ctx, PROTOCOL, ADDRESS); e == nil {
+	if c, e := d.DialContext(ctx, p, a); e == nil {
 		defer c.Close()
 
 		f(c)

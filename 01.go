@@ -5,16 +5,14 @@ import (
 	"net/http"
 )
 
-const MESSAGE = "hello world"
-
 func main() {
 	http.HandleFunc("/hello", Hello)
-	if e := http.ListenAndServe(ADDRESS, nil); e != nil {
+	if e := http.ListenAndServe("localhost:1024", nil); e != nil {
 		fmt.Println(e)
 	}
 }
 
 func Hello(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintf(w, MESSAGE)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "hello world")
 }

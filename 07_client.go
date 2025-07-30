@@ -9,10 +9,8 @@ import (
 	"time"
 )
 
-const PROTOCOL = "tcp"
-
 func main() {
-	DialServer(PROTOCOL, ADDRESS, func(c net.Conn) {
+	DialServer("tcp", "localhost:1024", func(c net.Conn) {
 		for _, n := range os.Args[1:] {
 			FetchFile(c, n, func(b []byte) {
 				ForEachRecord(b, func(p Person) {
@@ -26,14 +24,13 @@ func main() {
 func FetchFile(c net.Conn, n string, f func([]byte)) {
 	log.Println("Requesting file", n)
 	SendMessage(c, n)
-	m, e := ReceiveMessage(c)
-	LogErrors(e, func() {
+	if m, e := ReceiveMessage(c); e == nil {
 		if len(m) == 0 {
 			log.Println("File", n, "not found")
 			return
 		}
 		f(m)
-	})
+	}
 }
 
 func DialServer(p, a string, f func(net.Conn)) {
@@ -41,9 +38,10 @@ func DialServer(p, a string, f func(net.Conn)) {
 	defer cancel()
 
 	var d net.Dialer
-	c, e := d.DialContext(ctx, PROTOCOL, ADDRESS)
-	LogErrors(e, func() {
+	if c, e := d.DialContext(ctx, p, a); e == nil {
 		defer c.Close()
 		f(c)
-	})
+	} else {
+		log.Println(e)
+	}
 }

@@ -9,19 +9,8 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 )
-
-const ADDRESS = ":1024"
-const HTTPS_URL = "https://localhost:1024/"
-
-const ROOT_DIR = "."
-const BACKSLASH = "/"
-
-const HTML = ".html"
-const JSON = ".json"
-
-const MESSAGE_TERMINATOR = '\n'
-const MESSAGE_WHITESPACE = ' '
 
 type Person struct {
 	Id   int    `json:"id"`
@@ -29,12 +18,18 @@ type Person struct {
 	Age  string
 }
 
+func GetSocketOption(c *net.UDPConn, p int) (r int) {
+	fd, _ := c.File()
+	r, _ = syscall.GetsockoptInt(int(fd.Fd()), syscall.SOL_SOCKET, p)
+	return
+}
+
 func SendMessage(c net.Conn, s ...any) {
 	for _, v := range s {
 		switch v := v.(type) {
 		case []byte:
 			c.Write(v)
-			c.Write([]byte(string(MESSAGE_TERMINATOR)))
+			c.Write([]byte(string('\n')))
 		case string:
 			SendMessage(c, []byte(v))
 		case rune:
@@ -48,40 +43,65 @@ func SendMessage(c net.Conn, s ...any) {
 }
 
 func ReceiveMessage(c net.Conn) (b []byte, e error) {
-	if b, e = bufio.NewReader(c).ReadBytes(MESSAGE_TERMINATOR); e == nil {
+	if b, e = bufio.NewReader(c).ReadBytes('\n'); e == nil {
 		b = b[:len(b)-1]
+	} else {
+		log.Println(e)
+	}
+	return
+}
+
+func ReadStream(c net.Conn) (r []byte) {
+	var e error
+	var n int
+	m := make([]byte, 1024)
+	if n, e = c.Read(m); e == nil {
+		r = m[:n]
+	} else {
+		log.Println(e)
 	}
 	return
 }
 
 func Tokens(b []byte) []string {
-	return strings.Split(string(b), string(MESSAGE_WHITESPACE))
+	return strings.Split(string(b), string(' '))
 }
 
 func ServerUrl(s ...string) string {
-	url := []string{HTTPS_URL}
-	return GetPath(append(url, s...)...)
+	return GetPath(append([]string{"https://localhost:1024/"}, s...)...)
 }
 
-func LoadFile(t, p string, f func(string, error)) {
-	j, e := ioutil.ReadFile(AddSuffix(p, t))
-	f(string(j), e)
+func LoadFile(t, p string) (b []byte) {
+	var e error
+	if b, e = ioutil.ReadFile(AddSuffix(p, t)); e != nil {
+		log.Println(e)
+	}
+	return b
 }
 
 func GetPath(n ...string) string {
 	for i, v := range n {
-		n[i] = strings.Trim(v, BACKSLASH)
+		n[i] = strings.ToLower(strings.Trim(v, "/"))
 	}
-	return strings.Join(n, BACKSLASH)
+	return strings.Join(n, "/")
 }
 
 func GetDir(s ...string) (d string) {
 	if len(s) > 0 {
-		d = RemoveDuplicates(s[0], BACKSLASH)
+		d = RemoveDuplicates(s[0], "/")
 	} else {
-		d = ROOT_DIR
+		d = "."
 	}
-	return AddSuffix(d, BACKSLASH)
+	return AddSuffix(d, "/")
+}
+
+func DeleteAll[T comparable](s []T, p T) (r []T) {
+	for _, v := range s {
+		if v != p {
+			r = append(r, v)
+		}
+	}
+	return
 }
 
 func AddSuffix(v, s string) string {
@@ -97,51 +117,25 @@ func RemoveDuplicates(s, sep string) string {
 
 func ForEachRecord[T any](b []byte, f func(T)) {
 	r := []T{}
-	LogErrors(json.Unmarshal(b, &r), func() {
+	if e := json.Unmarshal(b, &r); e == nil {
 		for _, v := range r {
 			f(v)
 		}
-	})
+	} else {
+		log.Println(e)
+	}
 }
 
-func Parallelize(s []string, f func(string)) {
+func Parallelize[T any](s []T, f func(T)) {
 	var w sync.WaitGroup
 
 	for _, n := range s {
 		w.Add(1)
-		go func(n string) {
+		go func(n T) {
 			defer w.Done()
 
 			f(n)
 		}(n)
 	}
 	w.Wait()
-}
-
-func LogErrors(e error, f ...func()) {
-	fs, fe := BodyAndTail(f)
-	if e == nil {
-		for _, x := range fs {
-			x()
-		}
-	} else {
-		log.Println(e)
-		if fe != nil {
-			fe()
-		}
-	}
-}
-
-func BodyAndTail[T any](s []T) ([]T, T) {
-	var rt T
-	l := len(s) - 1
-	b, t := s[:l], s[l:]
-	if len(b) < len(t) {
-		b = append(b, t[0])
-		t = t[1:]
-	}
-	if len(t) > 0 {
-		rt = t[0]
-	}
-	return b, rt
 }
